@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-// ── Required data model (fields may not be removed) ──────────────────────────
+//        Required data model (fields may not be removed)                                                                               
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -25,7 +25,7 @@ pub struct Fill {
     pub qty:            u64,
 }
 
-// ── Wire types for HTTP API ───────────────────────────────────────────────────
+//        Wire types for HTTP API                                                                                                                                                          
 
 /// POST /orders  request body
 #[derive(Debug, Deserialize)]
