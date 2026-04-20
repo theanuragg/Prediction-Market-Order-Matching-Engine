@@ -62,7 +62,7 @@ impl Book {
             .collect()
     }
 
-    // ── BUY matching ─────────────────────────────────────────────────────────
+    //        BUY matching                                                                                                                                                                            
 
     fn match_buy(&mut self, incoming: &mut Order) -> Vec<Fill> {
         let mut fills = Vec::new();
@@ -119,7 +119,6 @@ impl Book {
         fills
     }
 
-    // ── SELL matching ────────────────────────────────────────────────────────
 
     fn match_sell(&mut self, incoming: &mut Order) -> Vec<Fill> {
         let mut fills = Vec::new();
@@ -175,7 +174,7 @@ impl Book {
     }
 }
 
-// ── Unit tests ────────────────────────────────────────────────────────────────
+//  Unit tests 
 
 #[cfg(test)]
 mod tests {
@@ -189,8 +188,7 @@ mod tests {
         Order { id, side: Side::Sell, price, qty }
     }
 
-    // ── 1. No match — buy below ask ──────────────────────────────────────────
-    #[test]
+    //        1. No match — buy below ask
     fn no_match_buy_below_ask() {
         let mut book = Book::new();
         assert!(book.process(sell(1, 100, 10)).is_empty());
@@ -199,7 +197,7 @@ mod tests {
         assert_eq!(book.bids_snapshot(), vec![(99, 5)]);
     }
 
-    // ── 2. No match — sell above bid ─────────────────────────────────────────
+    //        2. No match — sell above bid                                                                                                                            
     #[test]
     fn no_match_sell_above_bid() {
         let mut book = Book::new();
@@ -209,7 +207,7 @@ mod tests {
         assert_eq!(book.asks_snapshot(), vec![(101, 5)]);
     }
 
-    // ── 3. Exact fill — buy side taker ───────────────────────────────────────
+    //        3. Exact fill — buy side taker
     #[test]
     fn exact_fill_buy_taker() {
         let mut book = Book::new();
@@ -225,7 +223,7 @@ mod tests {
         assert!(book.asks_snapshot().is_empty());
     }
 
-    // ── 4. Exact fill — sell side taker ──────────────────────────────────────
+    //        4. Exact fill — sell side taker                                                                                                                   
     #[test]
     fn exact_fill_sell_taker() {
         let mut book = Book::new();
@@ -240,7 +238,7 @@ mod tests {
         assert!(book.asks_snapshot().is_empty());
     }
 
-    // ── 5. Partial fill — taker smaller than maker ───────────────────────────
+    //        5. Partial fill — taker smaller than maker                                                                                  
     #[test]
     fn partial_fill_taker_smaller() {
         let mut book = Book::new();
@@ -253,7 +251,7 @@ mod tests {
         assert!(book.bids_snapshot().is_empty());
     }
 
-    // ── 6. Partial fill — taker larger than maker ────────────────────────────
+    //        6. Partial fill — taker larger than maker                                                                                     
     #[test]
     fn partial_fill_taker_larger() {
         let mut book = Book::new();
@@ -266,7 +264,7 @@ mod tests {
         assert_eq!(book.bids_snapshot(), vec![(100, 4)]);
     }
 
-    // ── 7. Sweep multiple ask levels ─────────────────────────────────────────
+    //        7. Sweep multiple ask levels                                                                                                                            
     #[test]
     fn sweep_multiple_ask_levels() {
         let mut book = Book::new();
@@ -284,7 +282,7 @@ mod tests {
         assert!(book.bids_snapshot().is_empty());
     }
 
-    // ── 8. Sweep multiple bid levels ─────────────────────────────────────────
+    //        8. Sweep multiple bid levels                                                                                                                            
     #[test]
     fn sweep_multiple_bid_levels() {
         let mut book = Book::new();
@@ -301,7 +299,7 @@ mod tests {
         assert!(book.asks_snapshot().is_empty());
     }
 
-    // ── 9. Time priority — same price, earlier order fills first ─────────────
+    //        9. Time priority — same price, earlier order fills first                                        
     #[test]
     fn time_priority_asks() {
         let mut book = Book::new();
@@ -316,7 +314,7 @@ mod tests {
         assert_eq!(book.asks_snapshot(), vec![(100, 5)]);
     }
 
-    // ── 10. Time priority — same bid price ───────────────────────────────────
+    //        10. Time priority — same bid price                                                                                                          
     #[test]
     fn time_priority_bids() {
         let mut book = Book::new();
@@ -328,7 +326,7 @@ mod tests {
         assert_eq!(book.bids_snapshot(), vec![(100, 5)]);
     }
 
-    // ── 11. Price priority — lower ask fills before higher ask ───────────────
+    //        11. Price priority — lower ask fills before higher ask                                              
     #[test]
     fn price_priority_asks() {
         let mut book = Book::new();
@@ -344,7 +342,7 @@ mod tests {
         assert_eq!(fills[1].qty, 1);
     }
 
-    // ── 12. Fill price is always maker price ─────────────────────────────────
+    //        12. Fill price is always maker price                                                                                                    
     #[test]
     fn fill_price_is_maker_price() {
         let mut book = Book::new();
@@ -354,7 +352,7 @@ mod tests {
         assert_eq!(fills[0].price, 100);
     }
 
-    // ── 13. No self-cross (order rests when book empty) ──────────────────────
+    //        13. No self-cross (order rests when book empty)                                                                   
     #[test]
     fn rests_on_empty_book() {
         let mut book = Book::new();
@@ -364,7 +362,7 @@ mod tests {
         assert!(book.asks_snapshot().is_empty());
     }
 
-    // ── 14. Multiple orders same side, all rest ──────────────────────────────
+    //        14. Multiple orders same side, all rest                                                                                           
     #[test]
     fn multiple_bids_aggregate_correctly() {
         let mut book = Book::new();
@@ -376,7 +374,7 @@ mod tests {
         assert_eq!(bids, vec![(100, 10), (99, 5)]);
     }
 
-    // ── 15. Full book clear then new orders work correctly ───────────────────
+    //        15. Full book clear then new orders work correctly                                                          
     #[test]
     fn book_empties_and_accepts_new_orders() {
         let mut book = Book::new();

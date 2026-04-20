@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
 
-  # ── Redis ──────────────────────────────────────────────────────────────────
+  #    Redis                                                                   
   redis:
     image: redis:7-alpine
     ports:
@@ -14,7 +14,7 @@ services:
       retries: 15
     restart: unless-stopped
 
-  # ── Matching worker (single process — the serialization point) ────────────
+  #    Matching worker (single process — the serialization point)             
   matcher:
     build:
       context: .
@@ -30,7 +30,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── API server instance 1 ─────────────────────────────────────────────────
+  #    API server instance 1                                                  
   api1:
     build:
       context: .
@@ -48,7 +48,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── API server instance 2 ─────────────────────────────────────────────────
+  #    API server instance 2                                                  
   # Proves multi-instance correctness: orders submitted to either instance
   # are matched correctly and fills appear on WebSocket connections to both.
   api2:

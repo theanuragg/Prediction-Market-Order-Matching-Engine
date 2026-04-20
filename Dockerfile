@@ -30,7 +30,7 @@ COPY crates/ crates/
 ARG CRATE=api-server
 RUN cargo build --release -p ${CRATE}
 
-# ── Runtime image ─────────────────────────────────────────────────────────────
+#      Runtime image                                                                                                                           
 FROM alpine:3.19
 
 RUN apk add --no-cache libgcc

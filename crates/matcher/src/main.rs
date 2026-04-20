@@ -131,25 +131,7 @@ async fn update_snapshot(
     pipe.query_async(conn).await.context("snapshot pipeline failed")
 }
 
-// ── Stream entry parser ───────────────────────────────────────────────────────
-//
-// redis 0.23 Value enum:
-//   Bulk(Vec<Value>)  — nested arrays (was Array in newer versions)
-//   Data(Vec<u8>)     — binary strings (was BulkString)
-//   Status(String)    — simple strings (was SimpleString)
-//
-// XREADGROUP response shape:
-//   Bulk([
-//     Bulk([                        ← one element per stream key
-//       Data("orders_stream"),
-//       Bulk([                      ← list of entries
-//         Bulk([                    ← one entry
-//           Data("1234-0"),         ← entry id
-//           Bulk([k, v, k, v, ...]) ← field-value pairs
-//         ])
-//       ])
-//     ])
-//   ])
+
 
 fn parse_entry(val: &redis::Value) -> Option<(String, Order)> {
     use redis::Value::{Bulk};
