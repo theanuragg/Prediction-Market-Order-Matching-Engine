@@ -1,5 +1,6 @@
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 API1="http://localhost:8080"
 API2="http://localhost:8081"
@@ -18,25 +19,60 @@ green() { echo -e "${GREEN}✓${RESET} $1"; }
 red()   { echo -e "${RED}✗${RESET} $1"; }
 header() { echo -e "\n${CYAN}════════════════════════════════════════════════════════════════${RESET}"; echo -e "${CYAN}  $1${RESET}"; echo -e "${CYAN}════════════════════════════════════════════════════════════════${RESET}\n"; }
 
-# Wait for server to be ready
-wait_for_server() {
-    info "Waiting for API servers..."
-    for i in {1..20}; do
-        if curl -sf "$API1/orderbook" >/dev/null 2>&1; then
-            green "Server is ready"
+require_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        red "Missing required command: $1"
+        exit 1
+    fi
+}
+
+wait_for_endpoint() {
+    local name=$1
+    local url=$2
+
+    for _ in $(seq 1 30); do
+        if curl -sf "$url" >/dev/null 2>&1; then
+            green "$name is ready"
             return 0
         fi
         sleep 1
     done
-    red "ERROR: Server not responding"
-    exit 1
+
+    red "ERROR: $name is not responding at $url"
+    return 1
 }
 
-# Reset Redis state
-reset_redis() {
-    info "Resetting Redis state..."
-    redis-cli -p 6379 FLUSHALL >/dev/null 2>&1 || true
-    sleep 0.5
+# Wait for both servers to be ready
+wait_for_servers() {
+    info "Waiting for API servers..."
+    wait_for_endpoint "API1" "$API1/orderbook"
+    wait_for_endpoint "API2" "$API2/orderbook"
+}
+
+# Reset stack state safely by recreating Redis-backed matcher state.
+reset_state() {
+    info "Resetting stack state..."
+    docker compose stop api1 api2 matcher >/dev/null
+    docker compose exec -T redis redis-cli FLUSHALL >/dev/null
+    docker compose up -d matcher api1 api2 >/dev/null
+    wait_for_servers
+}
+
+submit_order() {
+    local api=$1
+    local side=$2
+    local price=$3
+    local qty=$4
+    local tmp status body
+
+    tmp=$(mktemp)
+    status=$(curl -sS -o "$tmp" -w "%{http_code}" -X POST "$api/orders" \
+        -H 'Content-Type: application/json' \
+        -d "{\"side\":\"$side\",\"price\":$price,\"qty\":$qty}" || true)
+    body=$(cat "$tmp")
+    rm -f "$tmp"
+
+    printf '%s\n%s\n' "$status" "$body"
 }
 
 # Core load test function
@@ -47,31 +83,40 @@ run_load_test() {
     
     header "$name: $rate orders/sec for $duration seconds"
     
-    orders_sent=0
-    errors=0
+    local orders_sent=0
+    local errors=0
+    local attempts=0
+    local start_time
+    local interval
+    local elapsed=0
+    local error_samples=()
     start_time=$(date +%s)
     interval=$(echo "scale=4; 1 / $rate" | bc)
-    elapsed=0
     
     info "Submitting orders..."
     
     while [ $elapsed -lt $duration ]; do
-        api=$([[ $((orders_sent % 2)) -eq 0 ]] && echo "$API1" || echo "$API2")
-        side=$([[ $((orders_sent % 3)) -eq 0 ]] && echo "buy" || echo "sell")
+        local api side price qty result status response
+        api=$([[ $((attempts % 2)) -eq 0 ]] && echo "$API1" || echo "$API2")
+        side=$([[ $((attempts % 3)) -eq 0 ]] && echo "buy" || echo "sell")
         price=$((95 + RANDOM % 11))
         qty=$((1 + RANDOM % 10))
-        
-        response=$(curl -sf -X POST "$api/orders" \
-            -H 'Content-Type: application/json' \
-            -d "{\"side\":\"$side\",\"price\":$price,\"qty\":$qty}" 2>/dev/null || echo '{"error":"failed"}')
-        
-        if echo "$response" | grep -q "order_id"; then
+        attempts=$((attempts + 1))
+
+        result=$(submit_order "$api" "$side" "$price" "$qty")
+        status=$(printf '%s\n' "$result" | sed -n '1p')
+        response=$(printf '%s\n' "$result" | sed -n '2,$p')
+
+        if [ "$status" = "200" ] && echo "$response" | grep -q "order_id"; then
             orders_sent=$((orders_sent + 1))
             if [ $((orders_sent % 100)) -eq 0 ]; then
                 stat "Orders sent: $orders_sent"
             fi
         else
             errors=$((errors + 1))
+            if [ ${#error_samples[@]} -lt 5 ]; then
+                error_samples+=("[$status] ${response:-<empty response>}")
+            fi
         fi
         
         sleep "$interval"
@@ -92,21 +137,28 @@ run_load_test() {
     
     echo ""
     stat "Test complete in $elapsed seconds"
+    stat "Attempts: $attempts"
     stat "Orders sent: $orders_sent"
     stat "Errors: $errors"
     stat "Throughput: $throughput orders/sec"
     stat "Final orderbook levels: $bids bids, $asks asks"
+    if [ ${#error_samples[@]} -gt 0 ]; then
+        info "Sample failures:"
+        for sample in "${error_samples[@]}"; do
+            echo "   $sample"
+        done
+    fi
 }
 
 # Test 1: Baseline
 test_baseline() {
-    reset_redis
+    reset_state
     run_load_test 100 20 "TEST 1: BASELINE THROUGHPUT"
 }
 
 # Test 2: Sustained load
 test_sustained() {
-    reset_redis
+    reset_state
     run_load_test 500 30 "TEST 2: SUSTAINED HIGH LOAD"
 }
 
@@ -115,7 +167,7 @@ test_spike() {
     header "TEST 3: TRAFFIC SPIKE PATTERN"
     
     info "Phase 1: Light load (50 orders/sec, 10s)"
-    reset_redis
+    reset_state
     run_load_test 50 10 "Phase 1"
     
     info "Phase 2: Sudden spike (1000 orders/sec, 10s)"
@@ -128,7 +180,7 @@ test_spike() {
 # Test 4: Deep order book
 test_deep_book() {
     header "TEST 4: DEEP ORDER BOOK (many price levels)"
-    reset_redis
+    reset_state
     
     info "Building deep book with 40 price levels..."
     for price in {80..120}; do
@@ -153,7 +205,7 @@ test_deep_book() {
 # Test 5: Large orders
 test_large_orders() {
     header "TEST 5: LARGE ORDERS (multi-level sweeps)"
-    reset_redis
+    reset_state
     
     info "Building resting sell book (20 levels × 100 qty)..."
     for i in {1..20}; do
@@ -182,7 +234,7 @@ test_large_orders() {
 # Test 6: Cross-instance consistency
 test_cross_instance() {
     header "TEST 6: CROSS-INSTANCE CONSISTENCY"
-    reset_redis
+    reset_state
     
     info "Submitting orders to both instances..."
     for i in {1..10}; do
@@ -280,7 +332,11 @@ main() {
     rate="${2:-}"
     duration="${3:-}"
     
-    wait_for_server
+    require_cmd docker
+    require_cmd curl
+    require_cmd bc
+    require_cmd python3
+    wait_for_servers
     
     case "$scenario" in
         baseline)
@@ -321,7 +377,7 @@ main() {
                 echo "Example: ./load_test.sh custom 1000 60"
                 exit 1
             fi
-            reset_redis
+            reset_state
             run_load_test "$rate" "$duration" "CUSTOM TEST"
             ;;
         help|--help|-h)

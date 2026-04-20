@@ -1,7 +1,5 @@
 
 # Environment files
-.env
-.env.local
 .env.*.local
 
 # Dependencies
@@ -13,7 +11,6 @@ build/
 dist/
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -32,3 +29,4 @@ npm-debug.log*
 credentials.json
 
 Cargo.lock
+config.bat
