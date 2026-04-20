@@ -1,0 +1,18 @@
+[package]
+name    = "matcher"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "matcher"
+path = "src/main.rs"
+
+[dependencies]
+types      = { path = "../types" }
+matching   = { path = "../matching" }
+tokio      = { workspace = true }
+redis      = { workspace = true }
+serde_json = { workspace = true }
+tracing    = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow     = { workspace = true }

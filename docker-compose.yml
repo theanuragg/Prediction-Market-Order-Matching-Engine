@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    restart: unless-stopped
+
+  # ── Matching worker (single process — the serialization point) ────────────
+  matcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CRATE: matcher
+    environment:
+      REDIS_URL: redis://redis:6379
+      RUST_LOG: info
+      CLAIM_MIN_IDLE_MS: "5000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── API server instance 1 ─────────────────────────────────────────────────
+  api1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CRATE: api-server
+    environment:
+      REDIS_URL: redis://redis:6379
+      PORT: "8080"
+      RUST_LOG: info
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── API server instance 2 ─────────────────────────────────────────────────
+  # Proves multi-instance correctness: orders submitted to either instance
+  # are matched correctly and fills appear on WebSocket connections to both.
+  api2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CRATE: api-server
+    environment:
+      REDIS_URL: redis://redis:6379
+      PORT: "8080"
+      RUST_LOG: info
+    ports:
+      - "8081:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
